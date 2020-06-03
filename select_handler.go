@@ -81,6 +81,12 @@ func handleSelect(sel *sqlparser.Select) (dsl string, esType string, err error) 
 	resultMap["query"] = queryMapStr
 	resultMap["from"] = queryFrom
 	resultMap["size"] = querySize
+
+	selExpr := handleSelectExpr(sel.SelectExprs)
+	if selExpr != "" {
+		resultMap["_source"] = handleSelectExpr(sel.SelectExprs)
+	}
+
 	if len(aggStr) > 0 {
 		resultMap["aggregations"] = aggStr
 	}
@@ -90,7 +96,7 @@ func handleSelect(sel *sqlparser.Select) (dsl string, esType string, err error) 
 	}
 
 	// keep the travesal in order, avoid unpredicted json
-	var keySlice = []string{"query", "from", "size", "sort", "aggregations"}
+	var keySlice = []string{"query", "from", "size", "sort", "aggregations", "_source"}
 	var resultArr []string
 	for _, mapKey := range keySlice {
 		if val, ok := resultMap[mapKey]; ok {
@@ -117,6 +123,21 @@ func checkNeedAgg(sqlSelect sqlparser.SelectExprs) bool {
 		}
 	}
 	return false
+}
+
+func handleSelectExpr(sqlSelect sqlparser.SelectExprs) string {
+	selStr := sqlparser.String(sqlSelect)
+	if selStr == "*" {
+		return ""
+	}
+	if strings.Contains(selStr, "(") && strings.Contains(selStr, ")") {
+		return ""
+	}
+	selStr = strings.ReplaceAll(selStr, " ", "")
+	s := `
+{"includes": ["%s"]}
+`
+	return fmt.Sprintf(s, strings.Join(strings.Split(selStr, ","), `","`))
 }
 
 func buildNestedFuncStrValue(nestedFunc *sqlparser.FuncExpr) (string, error) {
